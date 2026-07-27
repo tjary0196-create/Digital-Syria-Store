@@ -701,6 +701,7 @@
       <div class="section-title">💰 محفظتي</div>
       <div class="summary-card"><div class="summary-row total"><span>رصيدك الحالي</span><span id="wallet-balance-amount">0</span></div></div>
       <button class="primary-btn" id="open-topup-btn">📞 شحن الرصيد (تواصل مع الأدمن)</button>
+      <button class="secondary-btn" id="open-shamcash-btn" style="border-color:var(--gold); color:var(--gold);">💳 اشحن فوراً عبر شام كاش</button>
 
       <div class="summary-card" style="margin-top:16px;">
         <div class="section-title" style="font-size:14px; margin-bottom:12px;">🔑 شحن كود رصيد</div>
@@ -760,6 +761,43 @@
         <div class="cb-arrow">◀</div>
       </a>
     </div>
+  </div>
+</div>
+
+<!-- مودال شام كاش: خطوة 1 - إدخال المبلغ -->
+<div class="modal-backdrop" id="shamcash-amount-modal-backdrop">
+  <div class="modal">
+    <button class="modal-close" id="shamcash-amount-close-btn">إغلاق ✕</button>
+    <h3>💳 شحن عبر شام كاش</h3>
+    <p style="color:var(--text-dim); font-size:13px; line-height:1.8; margin-bottom:10px;">
+      اكتب المبلغ يلي بدك تشحنه بالدولار، وبنعرضلك رقم الحساب لتحول عليه، وبيضاف الرصيد أوتوماتيك بعد التحقق من التحويل.
+    </p>
+    <div class="field">
+      <label>المبلغ (USD)</label>
+      <input type="number" id="shamcash-amount-input" placeholder="مثال: 5" min="1" step="0.01">
+      <div class="field-error" id="shamcash-amount-error">⚠️ الرجاء إدخال مبلغ صحيح أكبر من صفر</div>
+    </div>
+    <button class="primary-btn" id="shamcash-create-invoice-btn">متابعة</button>
+  </div>
+</div>
+
+<!-- مودال شام كاش: خطوة 2 - الفاتورة والتحقق -->
+<div class="modal-backdrop" id="shamcash-invoice-modal-backdrop">
+  <div class="modal">
+    <button class="modal-close" id="shamcash-invoice-close-btn">إغلاق ✕</button>
+    <h3>💳 أتمم التحويل</h3>
+    <div class="payment-box">
+      حوّل مبلغ <b id="shamcash-invoice-amount">0</b> إلى حساب شام كاش:
+      <br><b id="shamcash-invoice-account" style="font-size:16px;">—</b>
+      <br>الوقت المتبقي لإتمام هذه الفاتورة: <b id="shamcash-invoice-timer">30:00</b>
+    </div>
+    <div class="field">
+      <label>رقم عملية التحويل</label>
+      <input type="text" id="shamcash-transfer-number-input" placeholder="أدخل رقم العملية بعد التحويل...">
+      <div class="field-error" id="shamcash-transfer-error">⚠️ الرجاء إدخال رقم عملية التحويل</div>
+    </div>
+    <button class="primary-btn" id="shamcash-verify-btn">✅ تحققت من التحويل، أكّد الآن</button>
+    <p id="shamcash-status-msg" style="text-align:center; font-size:13px; margin-top:10px; color:var(--text-dim);"></p>
   </div>
 </div>
 
@@ -1625,6 +1663,129 @@
   // ===== شحن الرصيد: تحويل يدوي عبر الأدمن (تلغرام/واتساب) =====
   // تم استبدال نظام "طلب شحن + إيصال + موافقة الأدمن" بالكامل: الأدمن يستقبل
   // التحويل مباشرة عبر تلغرام/واتساب ويضيف الرصيد يدوياً من لوحة التحكم (تعديل الرصيد).
+  // ===== شحن الرصيد عبر شام كاش (تلقائي) =====
+  let shamcashOrderId = null;
+  let shamcashCountdownInterval = null;
+
+  function shamcashShowError(fieldId, show) {
+    document.getElementById(fieldId).closest(".field").classList.toggle("invalid", show);
+  }
+
+  document.getElementById("open-shamcash-btn").addEventListener("click", () => {
+    if (!currentUser) { showToast("سجل الدخول أولاً", true); return; }
+    document.getElementById("shamcash-amount-input").value = "";
+    shamcashShowError("shamcash-amount-input", false);
+    document.getElementById("shamcash-amount-modal-backdrop").classList.add("active");
+  });
+
+  document.getElementById("shamcash-amount-close-btn").addEventListener("click", () => {
+    document.getElementById("shamcash-amount-modal-backdrop").classList.remove("active");
+  });
+
+  document.getElementById("shamcash-create-invoice-btn").addEventListener("click", async () => {
+    const amountInput = document.getElementById("shamcash-amount-input");
+    const amount = Number(amountInput.value);
+
+    if (!amount || amount <= 0) {
+      shamcashShowError("shamcash-amount-input", true);
+      return;
+    }
+    shamcashShowError("shamcash-amount-input", false);
+
+    const btn = document.getElementById("shamcash-create-invoice-btn");
+    btn.disabled = true;
+    btn.textContent = "جاري إنشاء الفاتورة...";
+
+    try {
+      const res = await fetch("/api/shamcash/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: currentUser.uid, amount }),
+      });
+      const json = await res.json();
+      if (json.status !== "success") throw new Error(json.message || "تعذر إنشاء الفاتورة");
+
+      shamcashOrderId = json.data.orderId;
+      document.getElementById("shamcash-invoice-amount").textContent = fmt(json.data.amount);
+      document.getElementById("shamcash-invoice-account").textContent = json.data.destinationAccount;
+      document.getElementById("shamcash-transfer-number-input").value = "";
+      document.getElementById("shamcash-status-msg").textContent = "";
+      shamcashShowError("shamcash-transfer-number-input", false);
+
+      document.getElementById("shamcash-amount-modal-backdrop").classList.remove("active");
+      document.getElementById("shamcash-invoice-modal-backdrop").classList.add("active");
+
+      if (shamcashCountdownInterval) clearInterval(shamcashCountdownInterval);
+      const timerEl = document.getElementById("shamcash-invoice-timer");
+      shamcashCountdownInterval = setInterval(() => {
+        const remaining = json.data.expiresAt - Date.now();
+        if (remaining <= 0) {
+          clearInterval(shamcashCountdownInterval);
+          timerEl.textContent = "00:00";
+          document.getElementById("shamcash-status-msg").textContent = "⏱️ انتهت صلاحية الفاتورة، أغلق وابدأ من جديد.";
+          return;
+        }
+        const m = Math.floor(remaining / 60000);
+        const s = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      }, 1000);
+    } catch (err) {
+      showToast(err.message || "حدث خطأ أثناء إنشاء الفاتورة", true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "متابعة";
+    }
+  });
+
+  document.getElementById("shamcash-invoice-close-btn").addEventListener("click", () => {
+    document.getElementById("shamcash-invoice-modal-backdrop").classList.remove("active");
+    if (shamcashCountdownInterval) clearInterval(shamcashCountdownInterval);
+  });
+
+  document.getElementById("shamcash-verify-btn").addEventListener("click", async () => {
+    const transferInput = document.getElementById("shamcash-transfer-number-input");
+    const transferNumber = transferInput.value.trim();
+
+    if (!transferNumber) {
+      shamcashShowError("shamcash-transfer-number-input", true);
+      return;
+    }
+    shamcashShowError("shamcash-transfer-number-input", false);
+
+    const btn = document.getElementById("shamcash-verify-btn");
+    const statusEl = document.getElementById("shamcash-status-msg");
+    btn.disabled = true;
+    btn.textContent = "جاري التحقق...";
+    statusEl.textContent = "";
+
+    try {
+      const res = await fetch("/api/shamcash/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: shamcashOrderId, transferNumber }),
+      });
+      const json = await res.json();
+
+      if (json.status === "success") {
+        showToast("🎉 تم شحن رصيدك بنجاح!");
+        if (shamcashCountdownInterval) clearInterval(shamcashCountdownInterval);
+        document.getElementById("shamcash-invoice-modal-backdrop").classList.remove("active");
+      } else if (json.status === "pending") {
+        statusEl.style.color = "var(--gold)";
+        statusEl.textContent = json.message || "لسا ما توصلت الحركة، جرّب كمان شوي.";
+      } else {
+        statusEl.style.color = "var(--red)";
+        statusEl.textContent = json.message || "حدث خطأ أثناء التحقق";
+      }
+    } catch (err) {
+      statusEl.style.color = "var(--red)";
+      statusEl.textContent = "تعذر الاتصال بالخادم، حاول مجدداً";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✅ تحققت من التحويل، أكّد الآن";
+    }
+  });
+
   document.getElementById("open-topup-btn").addEventListener("click", () => {
     document.getElementById("contact-modal-backdrop").classList.add("active");
   });
