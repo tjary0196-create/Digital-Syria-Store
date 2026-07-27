@@ -11,6 +11,13 @@ service cloud.firestore {
     // زيادة للرصيد لازم تكون "مربوطة" (get()) بقيمة حقيقية محفوظة بقاعدة
     // البيانات مسبقاً — أبداً برقم قادم من المتصفح مباشرة.
     //
+    // استثناء وحيد: تدفق شام كاش (shamcash_orders / shamcash_daily_stats /
+    // shamcash_monthly_stats) بيزيد الرصيد من سيرفر خارجي (Vercel Serverless
+    // Functions عبر firebase-admin SDK) مش من المتصفح ولا من Cloud
+    // Functions. الـ Admin SDK يتجاوز قواعد Firestore بالكامل، فمنمنع أي
+    // كتابة مباشرة من المتصفح على هالمجموعات (allow write: if false)
+    // ومنعتمد على أمان السيرفر الخارجي نفسه (متغيرات البيئة على Vercel).
+    //
     // ⚠️ حدود معروفة (موثّقة بالتقرير النهائي، بدون Cloud Functions ما
     // في طريقة نغلقها 100%):
     // 1) مجموع السلة بالدفع (checkout) يُحسب من المتصفح بناءً على أسعار
@@ -158,6 +165,30 @@ service cloud.firestore {
 
     match /admins/{admin} { allow read, write: if isAdmin(); }
     match /apiSources/{source} { allow read, write: if isAdmin(); }
+
+    // ═══════════════════════════════════════════════════════════════
+    // شام كاش: الشحن التلقائي عبر ShamCash API (خارج Firestore بالكامل).
+    // الإنشاء والتحديث والدفع كله بيصير حصراً عبر api/shamcash/*.js
+    // (Vercel Serverless + firebase-admin)، يلي بيتجاوز هالقواعد أصلاً.
+    // منمنع أي كتابة مباشرة من المتصفح حتى لو حدا حاول يلاعب بالبيانات،
+    // ومنسمح بقراءة كل مستخدم لطلباته هو بس (أو الأدمن يشوف الكل).
+    // ═══════════════════════════════════════════════════════════════
+    match /shamcash_orders/{orderId} {
+      allow read: if isAdmin() || isOwner(resource.data.uid);
+      allow write: if false;
+    }
+
+    // عدّادات الإحصاء اليومية/الشهرية (تُستخدم بلوحة التحكم بدل مسح كل
+    // سجل shamcash_orders في كل مرة) — قراءة للأدمن فقط، كتابة ممنوعة من
+    // المتصفح بالكامل (تنكتب فقط من verify.js عبر firebase-admin).
+    match /shamcash_daily_stats/{dayId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /shamcash_monthly_stats/{monthId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /orders/{order} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
