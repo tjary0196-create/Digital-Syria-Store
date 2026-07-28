@@ -195,6 +195,7 @@
     <button class="tab" data-panel="panel-categories">الأقسام</button>
     <button class="tab" data-panel="panel-wallet">المحفظة</button>
     <button class="tab" data-panel="panel-payment">طرق الدفع</button>
+    <button class="tab" data-panel="panel-shamcash">شام كاش 💳</button>
     <button class="tab" data-panel="panel-ads">الإعلانات</button>
     <button class="tab" data-panel="panel-api">سحب منتجات API</button>
     <button class="tab" data-panel="panel-referral">التحكم بالإحالة</button>
@@ -247,28 +248,20 @@
 
     <div class="panel" id="panel-payment">
       <div class="section-title">طرق الدفع</div>
-      <p class="hint">هاي البيانات بتظهر بصفحة إتمام الطلب وطلب شحن الرصيد عند المستخدم.</p>
+      <p class="hint">هاي البيانات بتظهر بصفحة إتمام الطلب وطلب شحن الرصيد عند المستخدم. طريقة الدفع الوحيدة المعتمدة حالياً هي شام كاش.</p>
 
-      <div class="field" style="margin-top:14px; display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--hairline); border-radius:12px; padding:12px;">
-        <div style="flex:1;">
-          <label style="margin:0;">تفعيل الدفع عبر شام كاش</label>
-          <p class="hint" style="margin:4px 0 0;">إطفاؤه بيخفي طريقة شام كاش بالكامل عن المستخدمين بالموقع.</p>
-        </div>
-        <button id="toggle-shamcash-btn" style="padding:10px 18px; border-radius:10px; border:none; font-weight:bold; cursor:pointer; flex-shrink:0; margin-right:10px;">مفعّل</button>
+      <div class="field" style="margin-top:14px;">
+        <label>الدفع التلقائي عبر شام كاش</label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="shamcash-enabled-toggle" style="width:20px; height:20px;">
+          <span>مفعّل (يظهر زر "اشحن فوراً عبر شام كاش" للمستخدمين بصفحة المحفظة)</span>
+        </label>
+        <p class="hint">إذا عطّلته، بيختفي الزر عند المستخدمين فوراً بدون ما تحتاج تعمل Redeploy.</p>
       </div>
-
-      <div class="field">
-        <label>عملة حساب شام كاش (العملة يلي الحساب فعلياً يستقبل فيها التحويلات)</label>
-        <select id="pay-shamcash-currency">
-          <option value="USD">دولار (USD)</option>
-          <option value="SYR">ليرة سورية (SYR)</option>
-        </select>
-        <p class="hint">هاد الخيار بيحدد بأي عملة رح تُنشأ فاتورة شام كاش ويتم التحقق منها — لازم يطابق عملة حساب شام كاش الحقيقي حتى تنضبط عملية المطابقة.</p>
-      </div>
-
-      <div class="field">
-        <label>رقم شام كاش (Sham Cash)</label>
+      <div class="field" style="margin-top:14px;">
+        <label>رقم/رمز شام كاش (يظهر للمستخدم عند الشحن التلقائي)</label>
         <input type="text" id="pay-cash" placeholder="مثال: 36a12d49df140f5b5ffc769684d31c77">
+        <p class="hint">هاد الرمز بيظهر مباشرة للمستخدم بصفحة الفاتورة ليحوّل عليه، وأي تعديل هون بينعكس فوراً.</p>
       </div>
       <div class="field">
         <label>محفظة USDT (اختياري)</label>
@@ -284,18 +277,25 @@
         <p class="hint">هاد الرقم يتحكم بكل تحويلات الأسعار بالمتجر بين الدولار والليرة السورية للمستخدمين.</p>
       </div>
       <button class="primary-btn" id="save-payment-btn" style="width:100%;">حفظ التغييرات</button>
+    </div>
 
-      <div class="section-title" style="margin-top:28px;">📊 إحصاء تحويلات شام كاش</div>
+    <div class="panel" id="panel-shamcash">
+      <div class="section-title">إحصائيات شام كاش</div>
       <div class="stat-grid">
-        <div class="stat-card gold"><span class="icon">📅</span><div class="num" id="sc-stat-today-amount">0</div><div class="lbl">تحويلات اليوم ($) — <span id="sc-stat-today-count">0</span> تحويلة</div></div>
-        <div class="stat-card green"><span class="icon">🗓️</span><div class="num" id="sc-stat-month-amount">0</div><div class="lbl">تحويلات الشهر ($) — <span id="sc-stat-month-count">0</span> تحويلة</div></div>
+        <div class="stat-card gold"><span class="icon">📅</span><div class="num" id="sc-stat-today-count">0</div><div class="lbl">عمليات اليوم</div></div>
+        <div class="stat-card gold"><span class="icon">💵</span><div class="num" id="sc-stat-today-sum">0 $</div><div class="lbl">مبلغ اليوم</div></div>
+        <div class="stat-card green"><span class="icon">🗓️</span><div class="num" id="sc-stat-month-count">0</div><div class="lbl">عمليات هذا الشهر</div></div>
+        <div class="stat-card green"><span class="icon">💰</span><div class="num" id="sc-stat-month-sum">0 $</div><div class="lbl">مبلغ هذا الشهر</div></div>
+        <div class="stat-card"><span class="icon">📊</span><div class="num" id="sc-stat-total-count">0</div><div class="lbl">إجمالي العمليات الناجحة</div></div>
+        <div class="stat-card"><span class="icon">🏦</span><div class="num" id="sc-stat-total-sum">0 $</div><div class="lbl">إجمالي المبالغ المحصّلة</div></div>
+        <div class="stat-card red"><span class="icon">⏳</span><div class="num" id="sc-stat-pending-count">0</div><div class="lbl">قيد الانتظار الآن</div></div>
       </div>
-      <div class="search-box">
-        <input type="text" id="sc-history-search" placeholder="ابحث برقم/اسم المستخدم أو كود التحويل...">
-        <button id="sc-history-search-clear">مسح</button>
+
+      <div class="section-title" style="margin-top:22px;">سجل التحويلات (آخر 300 عملية)</div>
+      <div class="field" style="margin-top:10px;">
+        <input type="text" id="sc-search-input" placeholder="🔎 دور برقم التحويل أو ايدي المستخدم أو اسمه...">
       </div>
-      <div id="sc-history-list"><div class="empty-state">جاري التحميل…</div></div>
-      <button class="secondary-btn" id="sc-history-load-more" style="width:100%; margin-top:10px; display:none;">تحميل المزيد</button>
+      <div id="shamcash-orders-list" style="margin-top:14px;"><div class="empty-state">جاري التحميل…</div></div>
     </div>
 
     <div class="panel" id="panel-ads">
@@ -562,8 +562,7 @@
   import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-    onSnapshot, query, where, runTransaction, serverTimestamp, writeBatch, Timestamp,
-    orderBy, limit, startAfter
+    onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, writeBatch, Timestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -697,6 +696,7 @@
     listenOrders();
     listenProducts();
     listenUsers();
+    listenShamcashOrders();
     listenAds();
     loadPaymentSettings();
     listenReferralSettings();
@@ -709,8 +709,6 @@
     listenRechargeCodes();
     loadLoyaltySettingsAdmin();
     loadMoviesSubscriptionAdmin();
-    listenShamcashStats();
-    loadShamcashHistory();
   });
 
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -1291,6 +1289,125 @@
     return `<span class="status-badge ${cls}">${text}</span>`;
   }
 
+  // === شام كاش: إحصائيات وسجل حي ===
+  let allShamcashOrders = [];
+  let shamcashSearchTerm = "";
+
+  function listenShamcashOrders() {
+    const q = query(collection(db, "shamcash_orders"), orderBy("createdAt", "desc"), limit(300));
+    onSnapshot(q, (snap) => {
+      allShamcashOrders = [];
+      snap.forEach((d) => allShamcashOrders.push({ id: d.id, ...d.data() }));
+      renderShamcashStats();
+      renderShamcashOrders();
+    }, (err) => {
+      console.warn("تعذر تحميل عمليات شام كاش:", err.message);
+    });
+  }
+
+  function shamcashStatusBadge(status) {
+    const map = {
+      paid: ["مدفوع ✓", "status-confirmed"],
+      pending: ["قيد الانتظار", "status-pending"],
+      expired: ["منتهي الصلاحية", "status-rejected"],
+      cancelled: ["ملغى", "status-rejected"],
+    };
+    const [text, cls] = map[status] || map.pending;
+    return `<span class="status-badge ${cls}">${text}</span>`;
+  }
+
+  function scToDate(field) {
+    return field?.toDate ? field.toDate() : null;
+  }
+
+  function isSameDay(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function isSameMonth(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  }
+
+  // بيحسب الإحصائيات (يومي/شهري/إجمالي/قيد الانتظار) أول بأول من نفس القائمة الحية
+  // بدون أي استعلام إضافي، حتى تنعكس أي عملية جديدة أو تغيّر بالحالة فوراً بالأرقام.
+  function renderShamcashStats() {
+    const now = new Date();
+    let todayCount = 0, todaySum = 0;
+    let monthCount = 0, monthSum = 0;
+    let totalCount = 0, totalSum = 0;
+    let pendingCount = 0;
+
+    allShamcashOrders.forEach((o) => {
+      const amount = Number(o.amount) || 0;
+      if (o.status === "paid") {
+        totalCount++;
+        totalSum += amount;
+        const paidDate = scToDate(o.paidAt) || scToDate(o.createdAt);
+        if (paidDate) {
+          if (isSameDay(paidDate, now)) { todayCount++; todaySum += amount; }
+          if (isSameMonth(paidDate, now)) { monthCount++; monthSum += amount; }
+        }
+      } else if (o.status === "pending") {
+        pendingCount++;
+      }
+    });
+
+    document.getElementById("sc-stat-today-count").textContent = todayCount;
+    document.getElementById("sc-stat-today-sum").textContent = `${todaySum.toFixed(2)} $`;
+    document.getElementById("sc-stat-month-count").textContent = monthCount;
+    document.getElementById("sc-stat-month-sum").textContent = `${monthSum.toFixed(2)} $`;
+    document.getElementById("sc-stat-total-count").textContent = totalCount;
+    document.getElementById("sc-stat-total-sum").textContent = `${totalSum.toFixed(2)} $`;
+    document.getElementById("sc-stat-pending-count").textContent = pendingCount;
+  }
+
+  function shamcashOrderCardHTML(o) {
+    const user = allUsers.find((u) => u.id === o.uid);
+    const userLabel = user ? (user.name || user.email || "مستخدم") : "مستخدم محذوف";
+    const createdDate = scToDate(o.createdAt);
+    const dateStr = createdDate ? createdDate.toLocaleString("ar-SY", { dateStyle: "medium", timeStyle: "short" }) : "—";
+    return `
+      <div class="card" data-id="${o.id}">
+        <div class="card-row">
+          <div class="card-info">
+            <div class="t-name">${escapeHTML(userLabel)} ${shamcashStatusBadge(o.status)}</div>
+            <div class="t-meta">🆔 ${escapeHTML(o.uid || "—")}</div>
+            <div class="t-meta">🕒 ${dateStr}</div>
+            ${o.transferNumber ? `<div class="t-meta">🔢 رقم التحويل: ${escapeHTML(o.transferNumber)}</div>` : ""}
+            <div style="color:var(--gold); font-weight:700; margin-top:6px;">${(Number(o.amount) || 0).toFixed(2)} $</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderShamcashOrders() {
+    const list = document.getElementById("shamcash-orders-list");
+    const term = shamcashSearchTerm.trim().toLowerCase();
+
+    let filtered = allShamcashOrders;
+    if (term) {
+      filtered = allShamcashOrders.filter((o) => {
+        const user = allUsers.find((u) => u.id === o.uid);
+        const haystack = [
+          o.uid, o.transferNumber, user?.name, user?.email,
+        ].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(term);
+      });
+    }
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state">${term ? "ما في نتائج مطابقة" : "ما في عمليات شام كاش بعد"}</div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(shamcashOrderCardHTML).join("");
+  }
+
+  document.getElementById("sc-search-input").addEventListener("input", (e) => {
+    shamcashSearchTerm = e.target.value;
+    renderShamcashOrders();
+  });
+
   function formatDisplayAmount(o) {
     // نحسب الرقم الآمن أولاً (fallback 0) قبل استخدام toFixed حتى لا ينكسر العرض
     // إذا كان الطلب بدون حقل total (كان الكود القديم بيحاول يستخدم o.total.toFixed مباشرة).
@@ -1707,16 +1824,6 @@
   });
 
   // === إعدادات الدفع ===
-  let shamcashEnabled = true; // القيمة الحالية المحمّلة من فايرستور (تنعدّل فوراً عند الضغط على زر التفعيل)
-
-  function renderShamcashToggleBtn() {
-    const btn = document.getElementById("toggle-shamcash-btn");
-    if (!btn) return;
-    btn.textContent = shamcashEnabled ? "مفعّل" : "معطل";
-    btn.style.background = shamcashEnabled ? "var(--green)" : "var(--red)";
-    btn.style.color = "white";
-  }
-
   async function loadPaymentSettings() {
     const snap = await getDoc(doc(db, "settings", "payment"));
     if (snap.exists()) {
@@ -1725,28 +1832,12 @@
       document.getElementById("pay-usdt").value = d.usdt || "";
       document.getElementById("pay-instructions").value = d.instructions || "";
       document.getElementById("pay-exchange-rate").value = d.exchangeRate || 15000;
-      document.getElementById("pay-shamcash-currency").value = d.shamcashCurrency === "SYR" ? "SYR" : "USD";
-      shamcashEnabled = d.shamcashEnabled !== false; // افتراضياً مفعّل إذا الحقل مو موجود بعد (توافق مع بيانات قديمة)
+      document.getElementById("shamcash-enabled-toggle").checked = d.shamcashEnabled !== false;
     } else {
       document.getElementById("pay-exchange-rate").value = 15000;
-      document.getElementById("pay-shamcash-currency").value = "USD";
-      shamcashEnabled = true;
+      document.getElementById("shamcash-enabled-toggle").checked = true;
     }
-    renderShamcashToggleBtn();
   }
-
-  document.getElementById("toggle-shamcash-btn").addEventListener("click", async () => {
-    shamcashEnabled = !shamcashEnabled;
-    renderShamcashToggleBtn();
-    try {
-      await setDoc(doc(db, "settings", "payment"), { shamcashEnabled }, { merge: true });
-      showToast(shamcashEnabled ? "تم تفعيل شام كاش!" : "تم إخفاء شام كاش عن المستخدمين!");
-    } catch (err) {
-      shamcashEnabled = !shamcashEnabled; // رجّع الحالة القديمة إذا فشل الحفظ
-      renderShamcashToggleBtn();
-      showToast("فشل تحديث الحالة، حاول مرة ثانية", true);
-    }
-  });
 
   document.getElementById("save-payment-btn").addEventListener("click", async () => {
     const rate = parseFloat(document.getElementById("pay-exchange-rate").value);
@@ -1755,112 +1846,9 @@
       usdt: document.getElementById("pay-usdt").value.trim(),
       instructions: document.getElementById("pay-instructions").value.trim(),
       exchangeRate: (!isNaN(rate) && rate > 0) ? rate : 15000,
-      shamcashCurrency: document.getElementById("pay-shamcash-currency").value === "SYR" ? "SYR" : "USD",
-      shamcashEnabled: shamcashEnabled,
+      shamcashEnabled: document.getElementById("shamcash-enabled-toggle").checked,
     }, { merge: true });
     showToast("تم حفظ بيانات الدفع!");
-  });
-
-  // === إحصاء وسجل تحويلات شام كاش (اعتماد على عدّادات جاهزة بدل مسح كل السجلات) ===
-  function scDayKey(d = new Date()) { return d.toISOString().slice(0, 10); }       // 2026-07-27
-  function scMonthKey(d = new Date()) { return d.toISOString().slice(0, 7); }      // 2026-07
-
-  function listenShamcashStats() {
-    const todayId = scDayKey();
-    const monthId = scMonthKey();
-
-    onSnapshot(doc(db, "shamcash_daily_stats", todayId), (snap) => {
-      const d = snap.exists() ? snap.data() : { count: 0, totalUSD: 0 };
-      document.getElementById("sc-stat-today-amount").textContent = (d.totalUSD || 0).toLocaleString("en-US");
-      document.getElementById("sc-stat-today-count").textContent = d.count || 0;
-    });
-
-    onSnapshot(doc(db, "shamcash_monthly_stats", monthId), (snap) => {
-      const d = snap.exists() ? snap.data() : { count: 0, totalUSD: 0 };
-      document.getElementById("sc-stat-month-amount").textContent = (d.totalUSD || 0).toLocaleString("en-US");
-      document.getElementById("sc-stat-month-count").textContent = d.count || 0;
-    });
-  }
-
-  const SC_HISTORY_PAGE_SIZE = 20;
-  let scHistoryDocs = [];       // كل الطلبات المحمّلة لحد هلق (تُستخدم للبحث المحلي)
-  let scHistoryLastDoc = null;  // آخر مستند لأجل "تحميل المزيد"
-  let scHistoryHasMore = true;
-
-  function renderShamcashHistory(filterText = "") {
-    const listEl = document.getElementById("sc-history-list");
-    const term = filterText.trim().toLowerCase();
-    const filtered = !term ? scHistoryDocs : scHistoryDocs.filter((o) => {
-      return String(o.userName || "").toLowerCase().includes(term)
-        || String(o.userPhone || "").toLowerCase().includes(term)
-        || String(o.uid || "").toLowerCase().includes(term)
-        || String(o.referenceCode || "").toLowerCase().includes(term);
-    });
-
-    if (!filtered.length) {
-      listEl.innerHTML = '<div class="empty-state">لا توجد تحويلات مطابقة</div>';
-      return;
-    }
-
-    listEl.innerHTML = filtered.map((o) => {
-      const dt = o.paidAt ? o.paidAt.toDate() : (o.createdAt ? o.createdAt.toDate() : null);
-      const dateStr = dt ? dt.toLocaleString("ar-SY", { dateStyle: "medium", timeStyle: "short" }) : "—";
-      const statusMap = { paid: "مدفوع", pending: "بانتظار الدفع", expired: "منتهي", cancelled: "ملغى" };
-      const statusClass = o.status === "paid" ? "status-confirmed" : (o.status === "pending" ? "status-pending" : "status-rejected");
-      return `
-        <div class="card">
-          <div class="card-row">
-            <div class="card-info">
-              <div class="t-name">${o.userName || "بدون اسم"} ${o.userPhone ? "— " + o.userPhone : ""}</div>
-              <div class="t-meta">UID: <span class="order-id-tag">${o.uid || "—"}</span></div>
-              <div class="t-meta">كود التحويل: <b style="color:var(--gold);">${o.referenceCode || "—"}</b></div>
-              <div class="t-meta">${dateStr}</div>
-            </div>
-            <div style="text-align:left;">
-              <div style="color:var(--gold); font-weight:800;">${o.amount || 0} ${o.currency || "USD"}</div>
-              <span class="status-badge ${statusClass}">${statusMap[o.status] || o.status}</span>
-            </div>
-          </div>
-        </div>`;
-    }).join("");
-  }
-
-  async function loadShamcashHistory(isLoadMore = false) {
-    const listEl = document.getElementById("sc-history-list");
-    if (!isLoadMore) {
-      scHistoryDocs = [];
-      scHistoryLastDoc = null;
-      scHistoryHasMore = true;
-      listEl.innerHTML = '<div class="empty-state">جاري التحميل…</div>';
-    }
-    if (!scHistoryHasMore) return;
-
-    try {
-      let q = query(collection(db, "shamcash_orders"), orderBy("createdAt", "desc"), limit(SC_HISTORY_PAGE_SIZE));
-      if (scHistoryLastDoc) {
-        q = query(collection(db, "shamcash_orders"), orderBy("createdAt", "desc"), startAfter(scHistoryLastDoc), limit(SC_HISTORY_PAGE_SIZE));
-      }
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        scHistoryHasMore = false;
-      } else {
-        snap.forEach((d) => scHistoryDocs.push({ id: d.id, ...d.data() }));
-        scHistoryLastDoc = snap.docs[snap.docs.length - 1];
-        scHistoryHasMore = snap.docs.length === SC_HISTORY_PAGE_SIZE;
-      }
-      document.getElementById("sc-history-load-more").style.display = scHistoryHasMore ? "block" : "none";
-      renderShamcashHistory(document.getElementById("sc-history-search").value);
-    } catch (err) {
-      console.error("loadShamcashHistory error:", err);
-      listEl.innerHTML = '<div class="empty-state">تعذّر تحميل السجل — تأكد من قواعد الأمان (Firestore Rules) للمجموعة shamcash_orders</div>';
-    }
-  }
-
-  document.getElementById("sc-history-load-more").addEventListener("click", () => loadShamcashHistory(true));
-  document.getElementById("sc-history-search").addEventListener("input", (e) => renderShamcashHistory(e.target.value));
-  document.getElementById("sc-history-search-clear").addEventListener("click", () => {
-    document.getElementById("sc-history-search").value = "";
-    renderShamcashHistory("");
   });
 
   // === إعلان صفحة البطولات ===
