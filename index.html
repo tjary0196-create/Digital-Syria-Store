@@ -791,12 +791,8 @@
       <br><b id="shamcash-invoice-account" style="font-size:16px;">—</b>
       <br>الوقت المتبقي لإتمام هذه الفاتورة: <b id="shamcash-invoice-timer">30:00</b>
     </div>
-    <div class="payment-box" style="border-color:var(--gold); margin-top:10px;">
-      ⚠️ مهم: اكتب هذا الكود بالضبط بخانة "الملاحظة/السبب" وقت التحويل بشام كاش، حتى يتم التحقق تلقائياً:
-      <br><b id="shamcash-invoice-refcode" style="font-size:20px; letter-spacing:1px; color:var(--gold);">—</b>
-    </div>
     <div class="field">
-      <label>رقم عملية التحويل (اختياري إذا كتبت الكود بالملاحظة)</label>
+      <label>رقم عملية التحويل</label>
       <input type="text" id="shamcash-transfer-number-input" placeholder="أدخل رقم العملية بعد التحويل...">
       <div class="field-error" id="shamcash-transfer-error">⚠️ الرجاء إدخال رقم عملية التحويل</div>
     </div>
@@ -840,7 +836,6 @@
   let exchangeRate = 15000;
   const checkoutCurrency = "SYR";
   let lastKnownBalance = 0;
-  let shamcashEnabled = true; // بتنعدّل فوراً من listenExchangeRate() حسب إعدادات لوحة التحكم
 
   function fmt(usdAmount) {
     const n = Number(usdAmount) || 0;
@@ -1469,14 +1464,12 @@
       if (snap.exists()) {
         const rate = Number(snap.data().exchangeRate);
         if (rate > 0) exchangeRate = rate;
-        // تفعيل/إخفاء زر الدفع عبر شام كاش حسب إعداد لوحة التحكم (افتراضياً مفعّل
-        // إذا الحقل مو موجود بعد، توافقاً مع بيانات قديمة).
-        shamcashEnabled = snap.data().shamcashEnabled !== false;
-      } else {
-        shamcashEnabled = true;
+        // بيتحكم الأدمن بإظهار/إخفاء زر الدفع التلقائي عبر شام كاش من لوحة التحكم
+        // مباشرة، وبينعكس هون فوراً بدون أي حاجة لإعادة تحميل الصفحة.
+        const shamcashEnabled = snap.data().shamcashEnabled !== false;
+        const shamcashBtn = document.getElementById("open-shamcash-btn");
+        if (shamcashBtn) shamcashBtn.style.display = shamcashEnabled ? "" : "none";
       }
-      const shamcashBtn = document.getElementById("open-shamcash-btn");
-      if (shamcashBtn) shamcashBtn.style.display = shamcashEnabled ? "" : "none";
       // نعيد رسم كل مكان بالموقع يعتمد على سعر الصرف فورًا، بغض النظر أي صفحة
       // فاتحها المستخدم حاليًا
       renderBalanceDisplays();
@@ -1677,7 +1670,6 @@
   // التحويل مباشرة عبر تلغرام/واتساب ويضيف الرصيد يدوياً من لوحة التحكم (تعديل الرصيد).
   // ===== شحن الرصيد عبر شام كاش (تلقائي) =====
   let shamcashOrderId = null;
-  let shamcashReferenceCode = null;
   let shamcashCountdownInterval = null;
 
   function shamcashShowError(fieldId, show) {
@@ -1686,7 +1678,6 @@
 
   document.getElementById("open-shamcash-btn").addEventListener("click", () => {
     if (!currentUser) { showToast("سجل الدخول أولاً", true); return; }
-    if (!shamcashEnabled) { showToast("الدفع عبر شام كاش غير متاح حالياً", true); return; }
     document.getElementById("shamcash-amount-input").value = "";
     shamcashShowError("shamcash-amount-input", false);
     document.getElementById("shamcash-amount-modal-backdrop").classList.add("active");
@@ -1698,9 +1689,9 @@
 
   document.getElementById("shamcash-create-invoice-btn").addEventListener("click", async () => {
     const amountInput = document.getElementById("shamcash-amount-input");
-    const amountUSD = Number(amountInput.value);
+    const amount = Number(amountInput.value);
 
-    if (!amountUSD || amountUSD <= 0) {
+    if (!amount || amount <= 0) {
       shamcashShowError("shamcash-amount-input", true);
       return;
     }
@@ -1711,31 +1702,18 @@
     btn.textContent = "جاري إنشاء الفاتورة...";
 
     try {
-      // منرسل المبلغ دايماً بالدولار (amountUSD) — السيرفر هو يلي بيحوّله لعملة
-      // حساب شام كاش الفعلية (USD أو SYR) حسب إعدادات لوحة التحكم.
       const res = await fetch("/api/shamcash/create-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: currentUser.uid, amountUSD }),
+        body: JSON.stringify({ uid: currentUser.uid, amount }),
       });
       const json = await res.json();
       if (json.status !== "success") throw new Error(json.message || "تعذر إنشاء الفاتورة");
 
       shamcashOrderId = json.data.orderId;
-      shamcashReferenceCode = json.data.referenceCode;
-
-      // نعرض المبلغ بنفس عملة الفاتورة الفعلية (json.data.currency) بدل ما نفترض
-      // دولار دايماً — هاد كان سبب عرض مبلغ غلط سابقاً (كان يحوّل المبلغ لليرة
-      // مرتين بالخطأ لما الحساب كان بالأصل دولار).
-      const amountLabel = json.data.currency === "SYR"
-        ? Number(json.data.amount).toLocaleString("en-US") + " ل.س"
-        : Number(json.data.amount).toFixed(2) + " $";
-      document.getElementById("shamcash-invoice-amount").textContent = amountLabel;
+      document.getElementById("shamcash-invoice-amount").textContent = fmt(json.data.amount);
       document.getElementById("shamcash-invoice-account").textContent = json.data.destinationAccount;
-      document.getElementById("shamcash-invoice-refcode").textContent = shamcashReferenceCode || "—";
-      // نعبّي الحقل مسبقاً بالكود حتى يقدر المستخدم يتحقق مباشرة بدون كتابة يدوية،
-      // وبيظل قادر يعدّله إذا حاب يكتب رقم عملية حقيقي بدالاً منه.
-      document.getElementById("shamcash-transfer-number-input").value = shamcashReferenceCode || "";
+      document.getElementById("shamcash-transfer-number-input").value = "";
       document.getElementById("shamcash-status-msg").textContent = "";
       shamcashShowError("shamcash-transfer-number-input", false);
 
@@ -1771,8 +1749,7 @@
 
   document.getElementById("shamcash-verify-btn").addEventListener("click", async () => {
     const transferInput = document.getElementById("shamcash-transfer-number-input");
-    // إذا المستخدم فضّى الحقل بالغلط، نرجع نستخدم كود التحويل التلقائي المخزّن
-    const transferNumber = transferInput.value.trim() || shamcashReferenceCode;
+    const transferNumber = transferInput.value.trim();
 
     if (!transferNumber) {
       shamcashShowError("shamcash-transfer-number-input", true);
