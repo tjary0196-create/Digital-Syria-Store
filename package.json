@@ -1,12 +1,15 @@
 {
   "name": "digital-syria-store",
   "version": "1.0.0",
-  "description": "متجر Digital Syria Store — موقع ثابت (HTML/CSS/JS) على خطة Firebase Spark المجانية بالكامل، بدون Cloud Functions وبدون أي باك-إند Node منفصل. كل الحماية منفّذة بقواعد Firestore (firestore.rules) وحدها.",
+  "description": "متجر Digital Syria Store",
   "private": true,
   "scripts": {
-    "deploy": "firebase deploy --only hosting,firestore:rules",
+    "deploy": "firebase deploy --only hosting",
     "deploy:hosting": "firebase deploy --only hosting",
     "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
   },
   "license": "UNLICENSED"
 }
