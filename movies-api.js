@@ -1,161 +1,127 @@
 /**
- * مصدر الأفلام: Internet Archive (archive.org)
+ * King Cinema API Integration
  * ================================================
- * كل الأفلام هون من مجموعة "Public Domain" الرسمية بموقع Internet Archive —
- * يعني حقوقها منتهية أو منشورة مفتوحة، والمشاهدة/التضمين قانوني 100% بدون
- * أي حاجة لترخيص أو اتفاقية توزيع.
- *
- * ملاحظة مهمة: هذا مصدر مؤقت مجاني وقانوني. لو حبيت لاحقاً تضيف مصادر
- * مرخّصة إضافية (اتفاقية توزيع رسمية مع منصة أخرى)، بس ضيف endpoint جديد
- * بنفس شكل fetchMovies وادمجه بمصفوفة النتائج.
+ * هذا الملف يقوم بجلب البيانات من سيرفرات King Cinema الأصلية
+ * التي تم استخراجها من تطبيق الـ APK.
  */
 
-const ARCHIVE_SEARCH_URL = "https://archive.org/advancedsearch.php";
-const ARCHIVE_THUMB_URL = "https://archive.org/services/img";
-const ARCHIVE_EMBED_URL = "https://archive.org/embed";
+const KING_CINEMA_BASE_URL = "https://kingcinema.app";
+const CONFIG_URL = "https://raw.githubusercontent.com/seedrama/app-config/main/domain.txt";
 
-let currentIdentifier = null;
-let heroMovie = null;
+let currentDomain = KING_CINEMA_BASE_URL;
 
 /**
- * جلب أفلام Public Domain من Internet Archive حسب كلمة بحث/تصنيف،
- * وعرضها بالحاوية المطلوبة.
+ * تحديث النطاق النشط من GitHub لضمان استمرارية العمل
  */
-async function fetchMovies(searchQuery, containerId) {
-  const container = document.getElementById(containerId);
-  if (container) {
-    container.innerHTML = '<div style="color:#999;padding:20px;">جاري التحميل...</div>';
-  }
-
-  try {
-    const q = `collection:(feature_films) AND mediatype:(movies) AND ${searchQuery}`;
-    const params = new URLSearchParams({
-      q,
-      output: "json",
-      rows: "20",
-      page: "1",
-      "sort[]": "downloads desc",
-    });
-    ["identifier", "title", "description", "year"].forEach((f) => params.append("fl[]", f));
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 ثانية كحد أقصى
-
-    const res = await fetch(`${ARCHIVE_SEARCH_URL}?${params.toString()}`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    const docs = (data.response && data.response.docs) || [];
-
-    if (!container) return docs;
-    container.innerHTML = "";
-
-    if (docs.length === 0) {
-      container.innerHTML = '<div style="color:#999;padding:20px;">ما في أفلام متاحة بهذا التصنيف حالياً</div>';
-      return docs;
+async function updateActiveDomain() {
+    try {
+        const response = await fetch(CONFIG_URL);
+        const text = await response.text();
+        if (text && text.startsWith('http')) {
+            currentDomain = text.trim();
+            console.log("Active Domain Updated:", currentDomain);
+        }
+    } catch (e) {
+        console.error("Failed to update domain, using default:", currentDomain);
     }
+}
 
-    docs.forEach((movie) => {
-      const card = document.createElement("div");
-      card.className = "movie-card";
-      const title = escapeHTML(movie.title || movie.identifier);
-      const year = movie.year ? ` (${escapeHTML(String(movie.year))})` : "";
-      card.innerHTML = `
-        <img src="${ARCHIVE_THUMB_URL}/${encodeURIComponent(movie.identifier)}" alt="${title}" loading="lazy"
-             onerror="this.src='https://archive.org/images/notfound.png'">
-        <div class="movie-card-info">
-          <h4 style="font-size:14px;margin-bottom:5px;">${title}${year}</h4>
-          <p style="font-size:11px;color:#00D4FF;">🏛️ Public Domain — قانوني ومجاني</p>
-        </div>
-      `;
-      card.onclick = () => openPlayer(movie);
-      container.appendChild(card);
-    });
-
-    if (containerId === "trending-movies" && docs.length > 0) {
-      setHeroMovie(docs[0]);
-    }
-    return docs;
-  } catch (error) {
-    console.error("Error fetching movies from Internet Archive:", error);
+/**
+ * جلب الأفلام من سيرفر King Cinema
+ */
+async function fetchMovies(action = 'list', categoryId = '1', containerId) {
+    const container = document.getElementById(containerId);
     if (container) {
-      const isTimeout = error.name === "AbortError";
-      container.innerHTML = `<div style="color:#999;padding:20px;">${
-        isTimeout
-          ? "الاتصال بـ Internet Archive بطيء جداً أو محجوب من شبكتك — جرّب VPN أو شبكة تانية"
-          : "تعذّر تحميل الأفلام حالياً، حاول لاحقاً"
-      }</div>`;
+        container.innerHTML = '<div class="loading-spinner">جاري تحميل الأفلام...</div>';
     }
-    return [];
-  }
+
+    try {
+        // استخدام API السيرفر الأصلي
+        const apiUrl = `${currentDomain}/api/app_sections.php?action=${action}&platform=app`;
+        
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        
+        // ملاحظة: هيكل البيانات قد يختلف حسب الـ API، سنقوم بتكييفه
+        const movies = data.posts || data.movies || [];
+
+        if (!container) return movies;
+        container.innerHTML = "";
+
+        if (movies.length === 0) {
+            container.innerHTML = '<div class="no-data">لا توجد أفلام متاحة حالياً</div>';
+            return movies;
+        }
+
+        movies.forEach((movie) => {
+            const card = document.createElement("div");
+            card.className = "movie-card";
+            const title = movie.title || "عنوان غير معروف";
+            const poster = movie.poster || movie.image || "assets/default-poster.png";
+            
+            card.innerHTML = `
+                <img src="${poster}" alt="${title}" loading="lazy" onerror="this.src='assets/default-poster.png'">
+                <div class="movie-card-info">
+                    <h4>${title}</h4>
+                    <p>${movie.year || ''} • ${movie.quality || 'HD'}</p>
+                </div>
+            `;
+            card.onclick = () => openKingPlayer(movie);
+            container.appendChild(card);
+        });
+
+        return movies;
+    } catch (error) {
+        console.error("Error fetching King Cinema movies:", error);
+        if (container) {
+            container.innerHTML = '<div class="error-msg">تعذر الاتصال بالسيرفر، يرجى المحاولة لاحقاً</div>';
+        }
+        return [];
+    }
 }
 
-// تعقيم بسيط لمنع أي XSS من بيانات وصفية قد يرفعها مستخدمون آخرون بـ Archive.org
-function escapeHTML(str) {
-  if (str === null || str === undefined) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+/**
+ * فتح مشغل الأفلام مع السيرفرات الأصلية
+ */
+function openKingPlayer(movie) {
+    const modal = document.getElementById("player-modal");
+    modal.style.display = "block";
+    document.getElementById("player-title").textContent = movie.title;
+    document.getElementById("player-overview").textContent = movie.description || "لا يوجد وصف متاح.";
+
+    // إعداد أزرار السيرفرات المستخرجة
+    const serverTabs = document.getElementById("server-tabs");
+    serverTabs.innerHTML = "";
+
+    // السيرفرات التي وجدناها في الـ APK
+    const servers = [
+        { name: "Server 1 (Main)", url: `${currentDomain}/api/extractor.php?url=${movie.id || movie.link}` },
+        { name: "Server 2 (Vibuxer)", url: `https://vibuxer.com/e/${movie.vibuxer_id || ''}` },
+        { name: "Server 3 (Voe)", url: `https://voe.sx/e/${movie.voe_id || ''}` },
+        { name: "Server 4 (Filemoon)", url: `https://filemoon.sx/e/${movie.filemoon_id || ''}` }
+    ];
+
+    servers.forEach((server, index) => {
+        const tab = document.createElement("div");
+        tab.className = `server-tab ${index === 0 ? 'active' : ''}`;
+        tab.textContent = server.name;
+        tab.onclick = () => {
+            document.querySelectorAll('.server-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById("video-iframe").src = server.url;
+        };
+        serverTabs.appendChild(tab);
+    });
+
+    // تشغيل السيرفر الأول تلقائياً
+    document.getElementById("video-iframe").src = servers[0].url;
+    document.body.style.overflow = "hidden";
 }
 
-function setHeroMovie(movie) {
-  heroMovie = movie;
-  const hero = document.getElementById("hero");
-  if (hero) {
-    hero.style.backgroundImage = `url(${ARCHIVE_THUMB_URL}/${encodeURIComponent(movie.identifier)})`;
-    document.getElementById("hero-title").textContent = movie.title || movie.identifier;
-    document.getElementById("hero-overview").textContent =
-      stripHtml(movie.description) || "فيلم من مجموعة الملكية العامة (Public Domain) — مجاني وقانوني بالكامل.";
-  }
-}
-
-function stripHtml(html) {
-  if (!html) return "";
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  let text = tmp.textContent || tmp.innerText || "";
-  // أرشيف الأفلام كتير مرات بيحط رابط IMDb خام بأول الوصف — نشيله
-  // ونشيل أي روابط تانية جوا النص، ونرتب المسافات الفايضة
-  text = text.replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").trim();
-  return text;
-}
-
-function playHeroMovie() {
-  if (heroMovie) openPlayer(heroMovie);
-}
-
-function openPlayer(movie) {
-  currentIdentifier = movie.identifier;
-  const modal = document.getElementById("player-modal");
-  modal.style.display = "block";
-  document.getElementById("player-title").textContent = movie.title || movie.identifier;
-  const overviewText = stripHtml(movie.description) || "لا يوجد وصف متاح حالياً لهذا الفيلم.";
-  document.getElementById("player-overview").textContent = overviewText;
-  // نخزّن النص الأصلي (قبل أي ترجمة) حتى زر "ترجم الوصف" بـ movies.html
-  // يقدر يوصله دايماً، وحتى ما نترجم نص مترجم أصلاً لو ضغط المستخدم الزر
-  // أكتر من مرة
-  window.currentMovieOriginalOverview = overviewText;
-  const translateBtn = document.getElementById("translate-desc-btn");
-  if (translateBtn) translateBtn.style.display = "inline-block";
-
-  const iframe = document.getElementById("video-iframe");
-  // مشغّل Internet Archive الرسمي — قانوني ومباشر، بدون أي سيرفرات وسيطة
-  iframe.src = `${ARCHIVE_EMBED_URL}/${encodeURIComponent(currentIdentifier)}`;
-
-  document.body.style.overflow = "hidden";
-}
-
-function closePlayer() {
-  document.getElementById("player-modal").style.display = "none";
-  document.getElementById("video-iframe").src = "";
-  document.body.style.overflow = "auto";
-}
-
-// Initialize — تصنيفات مبنية على كلمات مفتاحية حقيقية بمجموعة feature_films
-document.addEventListener("DOMContentLoaded", () => {
-  fetchMovies('subject:("action" OR "adventure")', "trending-movies");
-  fetchMovies('subject:("action")', "action-movies");
-  fetchMovies('subject:("horror" OR "thriller")', "horror-movies");
+// تشغيل عند التحميل
+document.addEventListener("DOMContentLoaded", async () => {
+    await updateActiveDomain();
+    fetchMovies('list', '1', 'trending-movies');
+    fetchMovies('list', '2', 'action-movies');
+    fetchMovies('list', '3', 'horror-movies');
 });

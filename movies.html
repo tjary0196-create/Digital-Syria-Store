@@ -386,7 +386,7 @@
             <h1 id="hero-title" class="hero-title">جاري التحميل...</h1>
             <p id="hero-overview" class="hero-info"></p>
             <div class="hero-btns">
-                <button class="play-btn" onclick="playHeroMovie()">▶ مشاهدة الآن</button>
+                <button class="play-btn" onclick="if(heroMovie) openKingPlayer(heroMovie)">▶ مشاهدة الآن</button>
                 <button class="info-btn">ⓘ تفاصيل أكثر</button>
             </div>
         </div>
@@ -442,7 +442,7 @@
         </div>
     </div>
 
-    <script src="movies-api.js?v=2"></script>
+    <script src="movies-api.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInWithPopup, signInWithRedirect, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
