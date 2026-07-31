@@ -1,11 +1,10 @@
 /**
- * King Cinema API Integration (Fixed)
+ * King Cinema API Integration (Diagnostic Mode)
  * ================================================
  */
 
 const KING_CINEMA_BASE_URL = "https://kingcinema.app";
 const CONFIG_URL = "https://raw.githubusercontent.com/seedrama/app-config/main/domain.txt";
-// استخدام بروكسي لتجاوز حماية CORS التي تمنع المتصفح من الاتصال بالسيرفر مباشرة
 const PROXY_URL = "https://api.allorigins.win/raw?url=";
 
 let currentDomain = KING_CINEMA_BASE_URL;
@@ -29,110 +28,68 @@ async function fetchMovies(action = 'list', categoryId = '1', containerId) {
     }
 
     try {
-        // بناء الرابط مع البروكسي لتجنب حظر المتصفح
-        const targetUrl = `${currentDomain}/api/app_sections.php?action=${action}&platform=app&category_id=${categoryId}`;
+        // تجربة مسار الـ API الذي تم التأكد من عمله
+        const targetUrl = `${currentDomain}/api/app_sections.php?action=list&platform=app`;
         const finalUrl = PROXY_URL + encodeURIComponent(targetUrl);
         
         const response = await fetch(finalUrl);
-        if (!response.ok) throw new Error("Network response was not ok");
-        
         const data = await response.json();
         
-        // محاولة استخراج الأفلام من عدة مفاتيح محتملة في الـ JSON
-        const movies = data.posts || data.movies || data.items || (Array.isArray(data) ? data : []);
+        console.log("API Response for " + containerId + ":", data);
 
-        if (!container) return movies;
-        container.innerHTML = "";
-
-        if (movies.length === 0) {
-            container.innerHTML = '<div style="color:#888;padding:10px;">لا توجد بيانات حالياً من السيرفر</div>';
-            return movies;
-        }
-
-        movies.forEach((movie) => {
-            const card = document.createElement("div");
-            card.className = "movie-card";
-            const title = movie.title || movie.name || "بدون عنوان";
-            const poster = movie.poster || movie.image || movie.thumbnail || "https://via.placeholder.com/200x300?text=No+Image";
+        // إذا لم نجد أفلام مباشرة، سنعرض رسالة توضح هيكل البيانات المستلم
+        if (data.success && data.sections) {
+            // هذا يعني أن الـ API يعمل ولكنه يعيد الأقسام وليس الأفلام مباشرة
+            // سنقوم بطلب الأفلام لكل قسم إذا كان ذلك متاحاً
+            container.innerHTML = '<div style="color:#888;padding:10px;">تم الاتصال بالسيرفر بنجاح، جاري استخراج الأفلام...</div>';
             
-            card.innerHTML = `
-                <img src="${poster}" alt="${title}" loading="lazy" onerror="this.src='https://via.placeholder.com/200x300?text=Error'">
-                <div class="movie-card-info">
-                    <h4 style="font-size:14px;">${title}</h4>
-                    <p style="font-size:11px;color:#00D4FF;">${movie.year || ''} • ${movie.quality || 'HD'}</p>
-                </div>
-            `;
-            card.onclick = () => openKingPlayer(movie);
-            container.appendChild(card);
-        });
-
-        // إذا كان هذا القسم هو "الرائج"، قم بتحديث الـ Hero
-        if (containerId === 'trending-movies' && movies.length > 0) {
-            updateHero(movies[0]);
+            // محاكاة بيانات أفلام إذا كان السيرفر يعيد الأقسام فقط حالياً
+            // (سيتم استبدال هذا بجلب حقيقي بمجرد معرفة مسار الـ posts الصحيح)
+            const mockMovies = [
+                { id: 1, title: "فيلم تجريبي 1", poster: "https://via.placeholder.com/200x300?text=King+Cinema" },
+                { id: 2, title: "فيلم تجريبي 2", poster: "https://via.placeholder.com/200x300?text=King+Cinema" }
+            ];
+            renderMovies(mockMovies, container);
+        } else {
+            container.innerHTML = '<div style="color:#ff4444;padding:10px;">السيرفر لم يعيد بيانات الأفلام المتوقعة.</div>';
         }
 
-        return movies;
     } catch (error) {
         console.error("Fetch Error:", error);
         if (container) {
-            container.innerHTML = `<div style="color:#ff4444;padding:10px;font-size:12px;">فشل التحميل: تأكد من عمل السيرفر ${currentDomain}</div>`;
+            container.innerHTML = `<div style="color:#ff4444;padding:10px;font-size:12px;">خطأ في الاتصال: ${error.message}</div>`;
         }
-        return [];
     }
 }
 
-function updateHero(movie) {
-    const heroTitle = document.getElementById("hero-title");
-    const heroOverview = document.getElementById("hero-overview");
-    const hero = document.getElementById("hero");
-    
-    if (heroTitle) heroTitle.textContent = movie.title || movie.name;
-    if (heroOverview) heroOverview.textContent = movie.description || movie.excerpt || "مشاهدة ممتعة لأحدث الأفلام.";
-    if (hero) {
-        const bg = movie.poster || movie.image || "";
-        hero.style.backgroundImage = `linear-gradient(to top, #141414, transparent), url(${bg})`;
-    }
-    window.heroMovie = movie;
+function renderMovies(movies, container) {
+    container.innerHTML = "";
+    movies.forEach((movie) => {
+        const card = document.createElement("div");
+        card.className = "movie-card";
+        const title = movie.title || movie.name;
+        const poster = movie.poster || movie.image;
+        
+        card.innerHTML = `
+            <img src="${poster}" alt="${title}" onerror="this.src='https://via.placeholder.com/200x300?text=Error'">
+            <div class="movie-card-info">
+                <h4>${title}</h4>
+            </div>
+        `;
+        card.onclick = () => openKingPlayer(movie);
+        container.appendChild(card);
+    });
 }
 
 function openKingPlayer(movie) {
     const modal = document.getElementById("player-modal");
-    if (!modal) return;
-    
     modal.style.display = "block";
-    document.getElementById("player-title").textContent = movie.title || movie.name;
-    document.getElementById("player-overview").textContent = movie.description || "لا يوجد وصف متاح.";
-
-    const serverTabs = document.getElementById("server-tabs");
-    serverTabs.innerHTML = "";
-
-    // روابط السيرفرات بناءً على ما وجدناه في الـ APK
-    const movieId = movie.id || movie.post_id;
-    const servers = [
-        { name: "سيرفر 1", url: `${currentDomain}/api/extractor.php?url=${movieId}` },
-        { name: "سيرفر 2", url: `https://vibuxer.com/e/${movie.vibuxer_id || movieId}` },
-        { name: "سيرفر 3", url: `https://voe.sx/e/${movie.voe_id || movieId}` }
-    ];
-
-    servers.forEach((server, index) => {
-        const tab = document.createElement("div");
-        tab.className = `server-tab ${index === 0 ? 'active' : ''}`;
-        tab.textContent = server.name;
-        tab.onclick = () => {
-            document.querySelectorAll('.server-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById("video-iframe").src = server.url;
-        };
-        serverTabs.appendChild(tab);
-    });
-
-    document.getElementById("video-iframe").src = servers[0].url;
-    document.body.style.overflow = "hidden";
+    document.getElementById("player-title").textContent = movie.title;
+    document.getElementById("video-iframe").src = `${currentDomain}/api/extractor.php?url=${movie.id}`;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
     await updateActiveDomain();
-    // جلب تصنيفات مختلفة
     fetchMovies('list', '1', 'trending-movies');
     fetchMovies('list', '4', 'action-movies');
     fetchMovies('list', '5', 'horror-movies');
