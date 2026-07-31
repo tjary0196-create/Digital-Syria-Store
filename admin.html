@@ -1129,24 +1129,33 @@
     const token = data.token || "";
     const categories = (data.categories || "").split(',').map(s => s.trim()).filter(Boolean);
 
-    const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // نمر عبر بروكسي سيرفر خاص فينا (api/apiSources/sync.js) بدل الاتصال
+    // المباشر من المتصفح، لأن معظم الـ APIs الخارجية (زي Action Cash) محجوبة
+    // بقيود CORS من طرف المتصفح، وبتتطلب ترويسة "api-token" لا يمكن ضبطها
+    // بأمان إلا من طرف السيرفر.
+    const idToken = await currentUser.getIdToken();
+    const proxyRes = await fetch("/api/apiSources/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ url, token }),
+    });
+    const proxyJson = await proxyRes.json();
+    if (proxyJson.status !== "success") {
+      throw new Error(proxyJson.message || "فشل الاتصال بـ API");
     }
 
-    const response = await fetch(url, { headers });
-    if (!response.ok) throw new Error("فشل الاتصال بـ API");
-    const json = await response.json();
-
-    let products = json;
+    let products = proxyJson.data;
     if (!Array.isArray(products)) {
-      products = json.products || json.data || json.items || json.result || [];
+      products = products.products || products.data || products.items || products.result || [];
     }
     if (!Array.isArray(products)) throw new Error("تنسيق البيانات غير مدعوم");
 
     if (categories.length > 0) {
       products = products.filter(p => {
-        const pCat = (p.category || p.categories || '');
+        const pCat = (p.category || p.categories || p.category_name || '');
         return categories.some(c => pCat.includes(c));
       });
     }
@@ -1167,7 +1176,7 @@
         cost: parseFloat(p.cost) || 0,
         image: p.image || p.thumbnail || '',
         description: p.description || '',
-        category: p.category || p.categories || ''
+        category: p.category || p.categories || p.category_name || ''
       };
       if (existing && existing.manualOverride) {
         // نحافظ على القيم المعدَّلة يدوياً، ونحدّث باقي الحقول (الصورة/الوصف) من المصدر
