@@ -154,6 +154,16 @@
   .section-title small{ font-family:'Tajawal'; font-weight:400; color:var(--text-dim); font-size:12.5px; }
 
   .category-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:16px; margin-bottom:20px; }
+  .search-bar-wrap{ position:relative; margin-bottom:16px; }
+  .search-input{ width:100%; box-sizing:border-box; background:var(--card); border:1px solid var(--hairline); border-radius:14px; padding:14px 44px 14px 16px; color:var(--text); font-size:15px; outline:none; }
+  .search-input:focus{ border-color:var(--gold); }
+  .search-clear-btn{ position:absolute; left:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:6px; }
+  .category-section{ margin-bottom:24px; }
+  .category-section-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .category-section-title h3{ font-size:16px; margin:0; }
+  .category-section-title .see-all{ color:var(--gold); font-size:13px; cursor:pointer; background:none; border:none; }
+  .category-section-scroll{ display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; }
+  .category-section-scroll .product-card{ flex:0 0 130px; }
   .cat-box{
     position:relative;
     background:
@@ -515,12 +525,21 @@
     </div>
 
     <div class="view active" id="view-home">
-      <div class="section-title">الأقسام الرئيسية</div>
-      <div class="category-grid" id="category-grid"></div>
-      <div class="section-title">التصنيفات الفرعية</div>
-      <div class="cat-row" id="cat-row"></div>
-      <div class="section-title">المنتجات <small id="product-count"></small></div>
-      <div class="product-grid" id="product-grid"><div class="empty-state" style="grid-column:1/-1;">جاري تحميل المنتجات…</div></div>
+      <div class="search-bar-wrap">
+        <input type="text" id="product-search-input" class="search-input" placeholder="🔍 دور عن منتج... مثلاً: جواهر فري فاير">
+        <button id="search-clear-btn" class="search-clear-btn" style="display:none;">✕</button>
+      </div>
+      <div id="home-nav-block">
+        <div class="section-title">الأقسام الرئيسية</div>
+        <div class="category-grid" id="category-grid"></div>
+        <div class="section-title" id="subcat-title">التصنيفات الفرعية</div>
+        <div class="cat-row" id="cat-row"></div>
+      </div>
+      <div id="home-sections-view"></div>
+      <div id="home-flat-view" style="display:none;">
+        <div class="section-title" id="flat-view-title">المنتجات <small id="product-count"></small></div>
+        <div class="product-grid" id="product-grid"><div class="empty-state" style="grid-column:1/-1;">جاري تحميل المنتجات…</div></div>
+      </div>
       <div class="footer-links" style="margin-top:30px;"><button id="about-link-home">من نحن</button><button id="contact-link-home">تواصل مع الأدمن</button></div>
     </div>
 
@@ -827,6 +846,7 @@
   let allCategories = [];
   let activeCategory = null; // null يعني الكل
   let activeMainCategoryIds = null; // معرّفات القسم الرئيسي المختار + فروعه، تُستخدم عند الضغط على "الكل"
+  let searchQuery = ""; // نص البحث الحالي، بيتجاوز أي فلتر قسم لما يكون غير فاضي
   let selectedPayMethod = "balance"; // الآن فقط من الرصيد
 
   // ملاحظة: الموقع بالكامل يعرض ويقبض بالليرة السورية فقط. الدولار
@@ -1213,12 +1233,17 @@
     onSnapshot(collection(db, "categories"), (snap) => {
       allCategories = [];
       snap.forEach((d) => allCategories.push({ id: d.id, ...d.data() }));
+      // ترتيب الأقسام: حسب حقل order (الأقسام المسحوبة من API مرتّبة حسب أول
+      // ظهور لها بمصدرها الأصلي)، والأقسام يلي ما إلها order (أقسام قديمة/يدوية)
+      // بتضل بآخر الترتيب بترتيب ثابت
+      allCategories.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
       renderCategories();
+      renderProducts();
     });
   }
 
   function renderCategories() {
-    // عرض الأقسام الرئيسية (بدون أب)
+    // عرض الأقسام الرئيسية (بدون أب) بترتيبها
     const mainCategories = allCategories.filter(c => !c.parentId);
     const grid = document.getElementById("category-grid");
     if (mainCategories.length === 0) {
@@ -1241,6 +1266,9 @@
           const allIds = [id, ...childIds];
           activeCategory = allIds; // مصفوفة من المعرفات
           activeMainCategoryIds = allIds; // نحفظها حتى نقدر نرجع لها من زر "الكل"
+          searchQuery = "";
+          document.getElementById("product-search-input").value = "";
+          document.getElementById("search-clear-btn").style.display = "none";
           renderProducts();
           // تمييز القسم النشط
           grid.querySelectorAll(".cat-box").forEach(b => b.classList.remove("active"));
@@ -1283,6 +1311,13 @@
     row.querySelector('.cat-chip[data-id="all"]')?.classList.add("active");
   }
 
+  function deselectCategory() {
+    activeCategory = null;
+    activeMainCategoryIds = null;
+    document.getElementById("category-grid").querySelectorAll(".cat-box").forEach(b => b.classList.remove("active"));
+    document.getElementById("cat-row").innerHTML = "";
+  }
+
   // ===== المنتجات =====
   function loadProducts() {
     onSnapshot(collection(db, "products"), (snap) => {
@@ -1292,46 +1327,169 @@
     });
   }
 
+  // ── بحث ذكي: يشيل التشكيل وعلامات المد والفوارق البسيطة بأشكال الألف/الياء/التاء
+  // المربوطة، وبيقسّم نص البحث لكلمات، وبيعتبر المنتج مطابق إذا اسمه يحتوي كل
+  // كلمة من كلمات البحث (بأي ترتيب) كنص فرعي. هيك "فري فاير" بيطابق
+  // "جواهر فري فاير" رغم إنه "فري فاير" مش أول الاسم. ──
+  function normalizeArabic(text) {
+    return (text || "")
+      .toString()
+      .toLowerCase()
+      .replace(/[\u064B-\u065F\u0670]/g, "") // تشكيل
+      .replace(/[إأآا]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه")
+      .replace(/[ًٌٍَُِّْ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function searchProducts(query) {
+    const normalizedQuery = normalizeArabic(query);
+    const terms = normalizedQuery.split(" ").filter(Boolean);
+    if (terms.length === 0) return [];
+    return allProducts.filter(p => {
+      const name = normalizeArabic(p.name);
+      return terms.every(term => name.includes(term));
+    });
+  }
+
+  function renderProductCard(p) {
+    const imageSrc = p.imageData || p.imageUrl;
+    const card = document.createElement("div");
+    card.className = "product-card" + (p.isSponsored ? " sponsored" : "");
+    card.innerHTML = `
+      <div class="product-icon">${imageSrc ? `<img src="${imageSrc}" alt="${escapeHTML(p.name)}">` : (p.icon || "🎮")}</div>
+      <div class="product-price-badge">${fmt(p.price)}</div>
+      <div class="product-name">${escapeHTML(p.name)}</div>
+      <button class="product-btn">أضف للسلة</button>
+    `;
+    card.addEventListener("click", (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      openQuickBuy(p);
+    });
+    card.querySelector("button").addEventListener("click", (e) => {
+      e.stopPropagation();
+      addToCart(p);
+    });
+    return card;
+  }
+
   function renderProducts() {
+    const navBlock = document.getElementById("home-nav-block");
+    const sectionsView = document.getElementById("home-sections-view");
+    const flatView = document.getElementById("home-flat-view");
     const grid = document.getElementById("product-grid");
-    let filtered = allProducts;
-    if (activeCategory && Array.isArray(activeCategory)) {
-      // فلترة حسب معرفات الأقسام
-      filtered = allProducts.filter(p => activeCategory.includes(p.categoryId));
-    } else if (activeCategory && typeof activeCategory === 'string') {
-      // حالة قديمة، لكن نتعامل معها
-      filtered = allProducts.filter(p => p.categoryId === activeCategory);
+
+    // ── حالة البحث: بتتجاوز كل شي، بتدور بكل المنتجات بغض النظر عن القسم ──
+    if (searchQuery.trim()) {
+      navBlock.style.display = "none";
+      sectionsView.style.display = "none";
+      flatView.style.display = "";
+      const results = searchProducts(searchQuery);
+      document.getElementById("flat-view-title").innerHTML = `نتائج البحث <small>(${results.length})</small>`;
+      if (results.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">ما في نتائج مطابقة لـ "${escapeHTML(searchQuery)}"</div>`;
+        return;
+      }
+      grid.innerHTML = "";
+      results.forEach(p => grid.appendChild(renderProductCard(p)));
+      return;
     }
-    // ترتيب المنتجات: المميزة أولاً
+
+    navBlock.style.display = "";
+
+    // ── حالة "الكل" (ما في قسم محدد): نعرض كل قسم بصف منفصل بترتيب المصدر ──
+    if (!activeCategory) {
+      sectionsView.style.display = "";
+      flatView.style.display = "none";
+      const mainCategories = allCategories.filter(c => !c.parentId);
+      if (mainCategories.length === 0 && allProducts.length === 0) {
+        sectionsView.innerHTML = `<div class="empty-state">لا توجد منتجات بعد</div>`;
+        return;
+      }
+      let html = "";
+      mainCategories.forEach(cat => {
+        const children = allCategories.filter(c => c.parentId === cat.id);
+        const childIds = children.map(c => c.id);
+        const catProducts = allProducts.filter(p => p.categoryId === cat.id || childIds.includes(p.categoryId));
+        if (catProducts.length === 0) return;
+        html += `
+          <div class="category-section" data-catid="${cat.id}">
+            <div class="category-section-title">
+              <h3>${escapeHTML(cat.name)}</h3>
+              <button class="see-all" data-catid="${cat.id}">عرض الكل ◀</button>
+            </div>
+            <div class="category-section-scroll"></div>
+          </div>
+        `;
+      });
+      // منتجات بدون قسم معروف (احتياط)، تُعرض بآخر قسم عام
+      const categorizedIds = new Set(allCategories.map(c => c.id));
+      const uncategorized = allProducts.filter(p => !p.categoryId || !categorizedIds.has(p.categoryId));
+      if (uncategorized.length > 0) {
+        html += `
+          <div class="category-section" data-catid="__uncategorized">
+            <div class="category-section-title"><h3>منتجات أخرى</h3></div>
+            <div class="category-section-scroll"></div>
+          </div>
+        `;
+      }
+      if (!html) {
+        sectionsView.innerHTML = `<div class="empty-state">لا توجد منتجات بعد</div>`;
+        return;
+      }
+      sectionsView.innerHTML = html;
+      // نعبّي كل صف بعناصر المنتجات الحقيقية (DOM elements) بعد إدراج الهيكل
+      mainCategories.forEach(cat => {
+        const children = allCategories.filter(c => c.parentId === cat.id);
+        const childIds = children.map(c => c.id);
+        const catProducts = allProducts.filter(p => p.categoryId === cat.id || childIds.includes(p.categoryId));
+        if (catProducts.length === 0) return;
+        const scroll = sectionsView.querySelector(`.category-section[data-catid="${cat.id}"] .category-section-scroll`);
+        catProducts.forEach(p => scroll.appendChild(renderProductCard(p)));
+      });
+      if (uncategorized.length > 0) {
+        const scroll = sectionsView.querySelector(`.category-section[data-catid="__uncategorized"] .category-section-scroll`);
+        uncategorized.forEach(p => scroll.appendChild(renderProductCard(p)));
+      }
+      sectionsView.querySelectorAll(".see-all").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelector(`.cat-box[data-id="${btn.dataset.catid}"]`)?.click();
+        });
+      });
+      return;
+    }
+
+    // ── حالة قسم محدد: عرض شبكي مسطّح متل السابق ──
+    sectionsView.style.display = "none";
+    flatView.style.display = "";
+    let filtered = allProducts;
+    if (Array.isArray(activeCategory)) {
+      filtered = allProducts.filter(p => activeCategory.includes(p.categoryId));
+    }
     filtered.sort((a, b) => (b.isSponsored ? 1 : 0) - (a.isSponsored ? 1 : 0));
-    document.getElementById("product-count").textContent = `(${filtered.length})`;
+    document.getElementById("flat-view-title").innerHTML = `المنتجات <small id="product-count">(${filtered.length})</small>`;
     if (filtered.length === 0) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">لا توجد منتجات في هذا القسم</div>`;
       return;
     }
     grid.innerHTML = "";
-    filtered.forEach((p, idx) => {
-      const imageSrc = p.imageData || p.imageUrl;
-      const card = document.createElement("div");
-      card.className = "product-card" + (p.isSponsored ? " sponsored" : "");
-      card.innerHTML = `
-        <div class="product-icon">${imageSrc ? `<img src="${imageSrc}" alt="${escapeHTML(p.name)}">` : (p.icon || "🎮")}</div>
-        <div class="product-price-badge">${fmt(p.price)}</div>
-        <div class="product-name">${escapeHTML(p.name)}</div>
-        <button class="product-btn">أضف للسلة</button>
-      `;
-      // عند الضغط على البطاقة تفتح مودال الشراء السريع
-      card.addEventListener("click", (e) => {
-        if (e.target.tagName === 'BUTTON') return;
-        openQuickBuy(p);
-      });
-      card.querySelector("button").addEventListener("click", (e) => {
-        e.stopPropagation();
-        addToCart(p);
-      });
-      grid.appendChild(card);
-    });
+    filtered.forEach(p => grid.appendChild(renderProductCard(p)));
   }
+
+  // ── ربط شريط البحث ──
+  document.getElementById("product-search-input").addEventListener("input", (e) => {
+    searchQuery = e.target.value;
+    document.getElementById("search-clear-btn").style.display = searchQuery ? "" : "none";
+    renderProducts();
+  });
+  document.getElementById("search-clear-btn").addEventListener("click", () => {
+    searchQuery = "";
+    document.getElementById("product-search-input").value = "";
+    document.getElementById("search-clear-btn").style.display = "none";
+    renderProducts();
+  });
 
   // ===== مودال الشراء السريع =====
   let quickBuyProduct = null;
@@ -2003,6 +2161,16 @@
     const target = document.getElementById(viewId);
     if (target) {
       target.classList.add("active");
+      if (viewId === 'view-home') {
+        // نرجّع لعرض الأقسام المقسّمة الافتراضي كل مرة نرجع فيها للرئيسية
+        deselectCategory();
+        searchQuery = "";
+        const searchInput = document.getElementById("product-search-input");
+        if (searchInput) searchInput.value = "";
+        const clearBtn = document.getElementById("search-clear-btn");
+        if (clearBtn) clearBtn.style.display = "none";
+        renderProducts();
+      }
       if (viewId === 'view-profile' && currentUser) {
         // تحديث بيانات الملف الشخصي عند الفتح
         getDoc(doc(db, "users", currentUser.uid)).then(snap => {
