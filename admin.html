@@ -450,7 +450,19 @@
       </div>
       <p class="hint">المفتاح مخزَّن بقاعدة البيانات. تأكد إن قواعد أمان Firestore بتسمح فقط للأدمن بقراءة/كتابة مجموعة apiSources.</p>
     </div>
-    <div class="field"><label>الأقسام التي تريد سحبها (افصل بفاصلة)</label><input type="text" id="api-categories" placeholder="ألعاب, بطاقات, اشتراكات"></div>
+    <div class="field"><label>الأقسام التي تريد سحبها (افصل بفاصلة، فاضي = الكل)</label><input type="text" id="api-categories" placeholder="ألعاب, بطاقات, اشتراكات"></div>
+    <div class="field">
+      <label>هامش الربح الافتراضي % (يُطبَّق على كل منتج ما عندو هامش خاص فيه)</label>
+      <input type="number" id="api-default-margin" step="1" placeholder="مثال: 20">
+      <p class="hint">مثال: منتج سعره من المصدر 1$ وهامش الربح 20% → بيصير سعره للزبون 1.2$.</p>
+    </div>
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="api-auto-publish" style="width:20px; height:20px;">
+        <span>انشر كل المنتجات المسحوبة تلقائياً بالمتجر</span>
+      </label>
+      <p class="hint">إذا عطّلته، لازم تنشر كل منتج يدوياً من زر التعديل ✎.</p>
+    </div>
     <div class="modal-btn-row">
       <button class="secondary-btn" id="api-cancel-btn">إلغاء</button>
       <button class="primary-btn" id="api-save-btn">حفظ وسحب المنتجات</button>
@@ -464,10 +476,27 @@
     <h3>تعديل منتج API</h3>
     <input type="hidden" id="api-product-edit-apiid">
     <input type="hidden" id="api-product-edit-prodid">
-    <p class="hint">تعديلاتك هون بتُحفظ وما بتنمسح بالمزامنة القادمة (تُعلَّم "معدَّل يدوياً").</p>
+    <p class="hint">تعديلاتك هون بتُحفظ وما بتنمسح بالمزامنة القادمة (تُعلَّم "معدَّل يدوياً")، وبتنعكس فوراً على المتجر.</p>
     <div class="field"><label>الاسم</label><input type="text" id="api-product-name"></div>
-    <div class="field"><label>السعر ($)</label><input type="number" id="api-product-price" step="0.01"></div>
-    <div class="field"><label>التكلفة ($)</label><input type="number" id="api-product-cost" step="0.01"></div>
+    <div class="field">
+      <label>سعر المصدر (التكلفة، من API مباشرة)</label>
+      <div id="api-product-source-price" style="color:var(--text-dim); padding:6px 0;">0.000 $</div>
+    </div>
+    <div class="field">
+      <label>هامش الربح % (فاضي = يستخدم الهامش الافتراضي لهذا المصدر)</label>
+      <input type="number" id="api-product-margin" step="1" placeholder="مثال: 20">
+    </div>
+    <div class="field">
+      <label>السعر النهائي للزبون ($)</label>
+      <input type="number" id="api-product-price" step="0.001">
+      <p class="hint">إذا عدّلت هالسعر يدوياً هو يصير الثابت، وهامش الربح فوق ما بيُطبَّق تلقائياً بعدها.</p>
+    </div>
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="api-product-published" style="width:20px; height:20px;">
+        <span>منشور بالمتجر (يظهر للزبائن)</span>
+      </label>
+    </div>
     <div class="modal-btn-row">
       <button class="secondary-btn" id="api-product-cancel-btn">إلغاء</button>
       <button class="primary-btn" id="api-product-save-btn">حفظ</button>
@@ -1060,7 +1089,7 @@
             </div>
           </div>
           <div class="row" style="margin-top:6px;">
-            <span class="url">الأقسام: ${escapeHTML(api.categories || 'الكل')}</span>
+            <span class="url">الأقسام: ${escapeHTML(api.categories || 'الكل')} • هامش افتراضي: ${api.defaultMarginPercent || 0}% • ${api.autoPublish !== false ? 'نشر تلقائي مفعّل' : 'نشر يدوي فقط'}</span>
             <button class="icon-btn success" data-action="sync">🔄 سحب الآن</button>
           </div>
           <div id="api-products-${api.id}" style="margin-top:10px;">
@@ -1068,11 +1097,16 @@
               <div class="api-product-item">
                 ${p.image ? `<img src="${p.image}">` : `<span>📦</span>`}
                 <div class="info">
-                  <div class="name">${p.manualOverride ? `<span class="override-tag">معدَّل يدوياً</span>` : ""}${escapeHTML(p.name)}</div>
-                  <div class="price">السعر: ${escapeHTML(p.price)} $</div>
-                  <div class="cost">التكلفة: ${escapeHTML(p.cost || 0)} $</div>
+                  <div class="name">
+                    ${p.manualOverride ? `<span class="override-tag">معدَّل يدوياً</span>` : ""}
+                    <span class="status-badge ${p.published ? 'status-confirmed' : 'status-rejected'}">${p.published ? 'منشور' : 'غير منشور'}</span>
+                    ${escapeHTML(p.name)}
+                  </div>
+                  <div class="price">السعر: ${(p.price ?? 0).toFixed(3)} $ ${p.marginPercent != null ? `(هامش ${p.marginPercent}%)` : ''}</div>
+                  <div class="cost">تكلفة المصدر: ${(p.cost || 0).toFixed(3)} $</div>
                 </div>
-                <div class="card-actions" style="flex:0;">
+                <div class="card-actions" style="flex:0; display:flex; gap:4px;">
+                  <button class="icon-btn ${p.published ? 'danger' : 'success'}" data-action="toggle-publish" data-apiid="${api.id}" data-prodid="${p.id}">${p.published ? '⛔ إلغاء نشر' : '📢 نشر'}</button>
                   <button class="icon-btn gold" data-action="edit-api-product" data-apiid="${api.id}" data-prodid="${p.id}">✎</button>
                 </div>
               </div>
@@ -1119,6 +1153,27 @@
         openApiProductModal(btn.dataset.apiid, btn.dataset.prodid);
       });
     });
+    list.querySelectorAll("[data-action='toggle-publish']").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const apiId = btn.dataset.apiid;
+        const prodId = btn.dataset.prodid;
+        const api = allApiSources.find(a => a.id === apiId);
+        const product = api?.products?.find(p => String(p.id) === String(prodId));
+        if (!api || !product) { showToast("المنتج غير موجود", true); return; }
+        btn.disabled = true;
+        try {
+          product.published = !product.published;
+          product.publishOverride = true;
+          await updateDoc(doc(db, "apiSources", apiId), { products: api.products });
+          await publishApiProducts(apiId, api.products);
+          showToast(product.published ? "تم نشر المنتج بالمتجر" : "تم إلغاء نشر المنتج");
+        } catch (err) {
+          showToast("خطأ: " + err.message, true);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   async function syncApiProducts(apiId) {
@@ -1128,6 +1183,8 @@
     const url = data.url;
     const token = data.token || "";
     const categories = (data.categories || "").split(',').map(s => s.trim()).filter(Boolean);
+    const defaultMarginPercent = data.defaultMarginPercent || 0;
+    const autoPublish = data.autoPublish !== false;
 
     // نمر عبر بروكسي سيرفر خاص فينا (api/apiSources/sync.js) بدل الاتصال
     // المباشر من المتصفح، لأن معظم الـ APIs الخارجية (زي Action Cash) محجوبة
@@ -1167,26 +1224,124 @@
     const formatted = products.map(p => {
       // معرّف ثابت: id/sku من المصدر إن وجد، وإلا هاش ثابت مبني على الاسم بدل معرّف عشوائي
       // (Math.random) كان يولّد id جديد بكل مزامنة ويفصل المنتج عن أي تعديل يدوي سابق.
-      const stableId = p.id || p.sku || stableHash(p.name || p.title || '');
+      const stableId = String(p.id || p.sku || stableHash(p.name || p.title || ''));
       const existing = existingById[stableId];
-      const fresh = {
+      const sourceCost = parseFloat(p.price) || 0; // هاد السعر يلي المصدر بياخده منا (التكلفة الحقيقية)
+
+      if (existing && existing.manualOverride) {
+        // نحافظ على الاسم/السعر/الهامش المعدَّلين يدوياً بالكامل، ونحدّث بس التكلفة
+        // والصورة والوصف من المصدر، وحالة النشر (إلا إذا عدّلها الأدمن يدوياً كمان)
+        return {
+          id: stableId,
+          name: existing.name,
+          price: existing.price,
+          cost: sourceCost,
+          marginPercent: existing.marginPercent ?? null,
+          manualOverride: true,
+          image: p.image || p.thumbnail || existing.image || '',
+          description: p.description || existing.description || '',
+          category: p.category || p.categories || p.category_name || existing.category || '',
+          published: existing.publishOverride ? existing.published : autoPublish,
+          publishOverride: existing.publishOverride || false,
+        };
+      }
+
+      // منتج جديد أو غير معدَّل يدوياً: نحسب السعر تلقائياً = التكلفة + هامش الربح
+      const margin = existing?.marginPercent ?? defaultMarginPercent;
+      const price = Math.round(sourceCost * (1 + margin / 100) * 1000) / 1000;
+
+      return {
         id: stableId,
         name: p.name || p.title || 'منتج',
-        price: parseFloat(p.price) || 0,
-        cost: parseFloat(p.cost) || 0,
+        price,
+        cost: sourceCost,
+        marginPercent: existing?.marginPercent ?? null,
         image: p.image || p.thumbnail || '',
         description: p.description || '',
-        category: p.category || p.categories || p.category_name || ''
+        category: p.category || p.categories || p.category_name || '',
+        published: existing?.publishOverride ? existing.published : autoPublish,
+        publishOverride: existing?.publishOverride || false,
       };
-      if (existing && existing.manualOverride) {
-        // نحافظ على القيم المعدَّلة يدوياً، ونحدّث باقي الحقول (الصورة/الوصف) من المصدر
-        return { ...fresh, name: existing.name, price: existing.price, cost: existing.cost, manualOverride: true };
-      }
-      return fresh;
     });
 
     await updateDoc(doc(db, "apiSources", apiId), { products: formatted });
+    await publishApiProducts(apiId, formatted);
     showToast(`تم سحب ${formatted.length} منتج`);
+  }
+
+  // ── نشر منتجات مصدر API فعلياً بمجموعة products (يلي المتجر index.html
+  // بيقرأ منها مباشرة). بينشئ/يحدّث قسم لكل category_name جديد بترتيب ظهوره
+  // بمصفوفة المنتجات (بما إن الـ API ما بيرجّع ترتيب صريح للأقسام، أقرب تقريب
+  // موثوق هو ترتيب أول ظهور بالاستجابة نفسها، يلي بينعكس عادةً ترتيب الموقع
+  // المصدر). المنتجات غير المنشورة (published:false) بينمسحوا من المتجر إذا
+  // كانوا منشورين قبل هيك. ──
+  async function publishApiProducts(apiId, products) {
+    // 1) نحدد أقسام جديدة محتاجة تُنشأ، بترتيب أول ظهور بالمصفوفة
+    const existingCatsSnap = await getDocs(collection(db, "categories"));
+    const existingCats = [];
+    existingCatsSnap.forEach(d => existingCats.push({ id: d.id, ...d.data() }));
+    let maxOrder = existingCats.reduce((m, c) => Math.max(m, c.order ?? 0), 0);
+
+    const catNameToId = {};
+    existingCats.forEach(c => { if (!c.parentId) catNameToId[c.name.trim().toLowerCase()] = c.id; });
+
+    const newCatNamesInOrder = [];
+    products.forEach(p => {
+      const catName = (p.category || 'عام').trim();
+      const key = catName.toLowerCase();
+      if (catName && !catNameToId[key] && !newCatNamesInOrder.some(n => n.toLowerCase() === key)) {
+        newCatNamesInOrder.push(catName);
+      }
+    });
+
+    for (const catName of newCatNamesInOrder) {
+      maxOrder += 1;
+      const newCatRef = await addDoc(collection(db, "categories"), {
+        name: catName,
+        parentId: null,
+        imageData: "",
+        order: maxOrder,
+        source: "api",
+      });
+      catNameToId[catName.toLowerCase()] = newCatRef.id;
+    }
+
+    // 2) ننشر/نحدّث كل منتج مُعلَّم published:true بمجموعة products الحقيقية
+    const batch = writeBatch(db);
+    const publishedDocIds = [];
+
+    products.forEach(p => {
+      const productDocId = `api_${apiId}_${p.id}`;
+      if (p.published) {
+        const catName = (p.category || 'عام').trim();
+        const categoryId = catNameToId[catName.toLowerCase()] || null;
+        batch.set(doc(db, "products", productDocId), {
+          name: p.name,
+          price: p.price,
+          imageUrl: p.image || "",
+          description: p.description || "",
+          categoryId,
+          isSponsored: false,
+          source: "api",
+          apiSourceId: apiId,
+          apiProductId: p.id,
+        }, { merge: true });
+        publishedDocIds.push(productDocId);
+      }
+    });
+    await batch.commit();
+
+    // 3) نمسح من المتجر أي منتج كان منشوراً سابقاً من هالمصدر وصار غير منشور
+    const staleSnap = await getDocs(query(collection(db, "products"), where("apiSourceId", "==", apiId)));
+    const deleteBatch = writeBatch(db);
+    let deletions = 0;
+    staleSnap.forEach(d => {
+      if (!publishedDocIds.includes(d.id)) {
+        deleteBatch.delete(d.ref);
+        deletions++;
+      }
+    });
+    if (deletions > 0) await deleteBatch.commit();
   }
 
   document.getElementById("add-api-btn").addEventListener("click", () => openApiModal(null));
@@ -1209,6 +1364,8 @@
     document.getElementById("api-token").type = "password";
     document.getElementById("api-token-toggle").textContent = "إظهار";
     document.getElementById("api-categories").value = api?.categories || "";
+    document.getElementById("api-default-margin").value = api?.defaultMarginPercent ?? "";
+    document.getElementById("api-auto-publish").checked = api?.autoPublish !== false;
     document.getElementById("api-modal-backdrop").classList.add("active");
   }
 
@@ -1220,13 +1377,22 @@
     if (!url) { showToast("الرجاء كتابة رابط API", true); return; }
     const token = document.getElementById("api-token").value.trim();
     const categories = document.getElementById("api-categories").value.trim();
-    const data = { url, token, categories };
+    const marginRaw = document.getElementById("api-default-margin").value;
+    const defaultMarginPercent = marginRaw === "" ? 0 : (parseFloat(marginRaw) || 0);
+    const autoPublish = document.getElementById("api-auto-publish").checked;
+    const data = { url, token, categories, defaultMarginPercent, autoPublish };
     btn.disabled = true;
     try {
-      if (id) await updateDoc(doc(db, "apiSources", id), data);
-      else await addDoc(collection(db, "apiSources"), data);
+      let sourceId = id;
+      if (id) {
+        await updateDoc(doc(db, "apiSources", id), data);
+      } else {
+        const newDoc = await addDoc(collection(db, "apiSources"), data);
+        sourceId = newDoc.id;
+      }
       document.getElementById("api-modal-backdrop").classList.remove("active");
-      showToast("تم حفظ المصدر");
+      showToast("تم حفظ المصدر، جاري السحب...");
+      await syncApiProducts(sourceId);
     } catch (err) {
       showToast("خطأ: " + err.message, true);
     } finally {
@@ -1237,13 +1403,15 @@
   // === مودال تعديل منتج API (بدل النوافذ المنبثقة prompt) ===
   function openApiProductModal(apiId, prodId) {
     const api = allApiSources.find(a => a.id === apiId);
-    const product = api?.products?.find(p => p.id === prodId);
+    const product = api?.products?.find(p => String(p.id) === String(prodId));
     if (!product) { showToast("المنتج غير موجود", true); return; }
     document.getElementById("api-product-edit-apiid").value = apiId;
-    document.getElementById("api-product-edit-prodid").value = prodId;
+    document.getElementById("api-product-edit-prodid").value = String(prodId);
     document.getElementById("api-product-name").value = product.name || "";
+    document.getElementById("api-product-source-price").textContent = (product.cost ?? 0).toFixed(3) + " $";
+    document.getElementById("api-product-margin").value = product.marginPercent ?? "";
     document.getElementById("api-product-price").value = product.price ?? 0;
-    document.getElementById("api-product-cost").value = product.cost ?? 0;
+    document.getElementById("api-product-published").checked = product.published !== false;
     document.getElementById("api-product-modal-backdrop").classList.add("active");
   }
 
@@ -1257,21 +1425,26 @@
     const apiId = document.getElementById("api-product-edit-apiid").value;
     const prodId = document.getElementById("api-product-edit-prodid").value;
     const api = allApiSources.find(a => a.id === apiId);
-    const product = api?.products?.find(p => p.id === prodId);
+    const product = api?.products?.find(p => String(p.id) === String(prodId));
     if (!api || !product) { showToast("المنتج غير موجود", true); return; }
 
     const newName = document.getElementById("api-product-name").value.trim();
     const newPrice = parseFloat(document.getElementById("api-product-price").value);
-    const newCost = parseFloat(document.getElementById("api-product-cost").value);
+    const marginRaw = document.getElementById("api-product-margin").value;
+    const newMargin = marginRaw === "" ? null : parseFloat(marginRaw);
+    const newPublished = document.getElementById("api-product-published").checked;
     if (!newName) { showToast("الرجاء كتابة اسم المنتج", true); return; }
 
     btn.disabled = true;
     try {
       product.name = newName;
       product.price = isNaN(newPrice) ? product.price : newPrice;
-      product.cost = isNaN(newCost) ? product.cost : newCost;
+      product.marginPercent = (newMargin === null || isNaN(newMargin)) ? null : newMargin;
       product.manualOverride = true;
+      product.published = newPublished;
+      product.publishOverride = true; // تعديل يدوي: ما بتتغيّر حالة النشر تلقائياً بالمزامنات الجاية
       await updateDoc(doc(db, "apiSources", apiId), { products: api.products });
+      await publishApiProducts(apiId); // ننشر فوراً أي تغيير على المتجر الحقيقي
       document.getElementById("api-product-modal-backdrop").classList.remove("active");
       showToast("تم تحديث المنتج");
     } catch (err) {
